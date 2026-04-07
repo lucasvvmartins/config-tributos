@@ -2,7 +2,12 @@
 
 **Feature:** cfgtrib-etapa1
 **Created:** 2026-04-07
+**Updated:** 2026-04-07 (v2 — alinhado com design.md v2 e SX3 real)
 **Total tasks:** 9
+
+> **IMPORTANTE para sub-agentes:** Ao implementar, consultar **design.md v2** como referência
+> canônica para interfaces TypeScript. O design.md v2 contém tabela de mapeamento
+> Campo Protheus → Interface TypeScript verificada contra o SX3 real.
 
 ---
 
@@ -41,23 +46,31 @@
 **Depends on:** TASK-01 (Vitest instalado para gate)
 **Parallel:** não
 
-**What:** Adicionar interfaces CFGTRIB e expandir TESConfig conforme design.md
+**What:** Adicionar interfaces CFGTRIB conforme **design.md v2** (campos verificados contra SX3 real)
 **Where:** `src/lib/types.ts`
 
 **Steps:**
-1. Adicionar `PerfilProduto`, `PerfilOperacao`, `PerfilParticipante`, `PerfilOrigemDestino`
-2. Adicionar `ValorOrigemBase`, `ValorOrigemAliq` (type unions)
-3. Adicionar `RegraBase`, `RegraAliquota`, `RegraEscrituracao`
-4. Adicionar `RegraCalculo`
-5. Expandir `TESConfig` com todos os campos SF4 (ver design.md seção TESConfig)
-6. Remover interface `StockRule`
-7. Manter `FiscalRule` (ainda usada em MapeamentoPage — remoção na TASK-08)
-8. Verificar: `npm run build` sem erros de tipo
+1. Adicionar `PerfilProduto` (F20+F24): codigo, descricao, produtos[{codProd}]
+2. Adicionar `PerfilOperacao` (F20+F23): codigo, descricao, cfops[{cfop, descricao}]
+3. Adicionar `PerfilParticipante` (F20+F22): codigo, descricao, participantes[{tipo:'1'|'2', codPart, loja, razaoSocial?}] — **'1'=Fornecedor, '2'=Cliente**
+4. Adicionar `PerfilOrigemDestino` (F20+F21): codigo, descricao, ufs[{ufOrigem, ufDestino}]
+5. Adicionar `ValorOrigemBase` ('01'-'11'), `ValorOrigemAliq` ('04'|'05'|'06')
+6. Adicionar `RegraBase` (F27): campos individuais desconto/frete/seguro/despesas/icmsDesonerado/icmsRetido (não arrays)
+7. Adicionar `RegraAliquota` (F28): sem campo formula (fórmulas ficam na CIN), com reducaoAliquota
+8. Adicionar `RegraEscrituracao` (CJ2): incidencia, somaTotal, cstCab, cst, cstCct, cct, indOp, nlivro, incidenciaDevolucao
+9. Adicionar `RegraCalculo` (F2B): com codBaseSecundaria, regraFinanceira, regraApuracao, tributoMajoracao
+10. Expandir `TESConfig` com campos SF4 verificados (ver design.md v2 — inclui ICMS, IPI, PIS/COFINS, ISS, ICMS-ST, DIFAL)
+11. Remover interface `StockRule`
+12. Manter `FiscalRule` (ainda usada em MapeamentoPage — remoção na TASK-08)
+13. Verificar: `npm run build` sem erros de tipo
+
+> **IMPORTANTE:** Copiar interfaces exatamente do design.md v2. NÃO consultar spec.md v1 para campos.
 
 **Done when:**
 - `npm run build` passa (sem erros TypeScript)
-- Todos os tipos listados no design.md existem em types.ts
+- Todos os tipos listados no design.md v2 existem em types.ts
 - `StockRule` removida
+- `PerfilParticipante.tipo` usa '1'|'2' (não 'C'|'F')
 
 **Gate:** `npm run build`
 
@@ -73,20 +86,21 @@
 **Where:** `src/lib/rules-engine.ts`
 
 **Steps:**
-1. Adicionar imports dos novos tipos no topo do arquivo
+1. Adicionar imports dos novos tipos (design.md v2) no topo do arquivo
 2. Implementar `generatePerfisOperacao(nfs: NFeParsed[]): PerfilOperacao[]`
-   - Agrupa CFOPs únicos
-   - Cria perfis: "Operações Internas" (CFOPs 5xxx), "Operações Interestaduais" (6xxx), "Entradas" (1xxx/2xxx), "Devoluções"
+   - Agrupa CFOPs únicos das NF-es
+   - Cria perfis com array de `{cfop, descricao}` (estrutura F23)
+   - Perfis: "Operações Internas" (CFOPs 5xxx), "Interestaduais" (6xxx), "Entradas" (1xxx/2xxx), "Devoluções"
    - Para CBS/IBS: inclui perfil "000051 - TODOS OS CFOPS"
 3. Implementar `generatePerfisOrigemDestino(nfs: NFeParsed[]): PerfilOrigemDestino[]`
-   - Extrai pares UF origem × UF destino únicos das NF-es
+   - Extrai pares UF origem × UF destino únicos (estrutura F21)
    - Adiciona perfil "000002 - Todas as UFS"
 4. Implementar `generatePerfisProduto(nfs: NFeParsed[]): PerfilProduto[]`
-   - Agrupa produtos por NCM
+   - Agrupa produtos por NCM com array de `{codProd}` (estrutura F24)
    - Adiciona perfil "TODOS" para CBS/IBS
 5. Implementar `generatePerfisParticipante(nfs: NFeParsed[]): PerfilParticipante[]`
-   - Perfil "TODOS" (tipo C+F, codPart=TODOS, loja=ZZ)
-   - Perfil por tipo de participante se identificável
+   - Perfil "TODOS" (tipo='1'+'2', codPart=TODOS, loja=ZZ) — **tipo '1'=Fornecedor, '2'=Cliente**
+   - Perfil por tipo de participante se identificável (estrutura F22)
 6. Exportar todas as funções
 
 **Done when:**
@@ -108,16 +122,18 @@
 
 **Steps:**
 1. Implementar `generateRegrasBase(nfs: NFeParsed[]): RegraBase[]`
-   - ICMS: valorOrigem='01', sem fórmula
-   - IPI: valorOrigem='01', sem fórmula
-   - PIS: valorOrigem='01', verificar se NF-es têm exclusão ICMS (CST PIS 01/02)
+   - ICMS: valorOrigem='01', ações individuais (desconto/frete/seguro/despesas) conforme cenário
+   - IPI: valorOrigem='01'
+   - PIS: valorOrigem='01', verificar se NF-es têm exclusão ICMS (CST PIS 01/02) → fórmula via CIN
    - COFINS: idem PIS
-   - CBS: valorOrigem='11', fórmula com operandos legados (ver design.md)
+   - CBS: valorOrigem='11' (Fórmula Manual), fórmula gravada via CIN (ver design.md v2 seção CBS/IBS Formula)
    - IBS: idem CBS
+   - **NOTA:** Campos são individuais (desconto, frete, seguro, despesas, icmsDesonerado, icmsRetido), NÃO arrays
 2. Implementar `generateRegrasAliquota(nfs: NFeParsed[]): RegraAliquota[]`
    - Para cada alíquota única extraída das NF-es: criar RegraAliquota
-   - CBS: aliquota=0.9, tipoAliquota='1'
-   - IBS: aliquota=0.1, tipoAliquota='1'
+   - CBS: aliquota=0.9, tipoAliquota='1', valorOrigem='04'
+   - IBS: aliquota=0.1, tipoAliquota='1', valorOrigem='04'
+   - **NOTA:** F28 não tem campo formula. Fórmulas de alíquota ficam na tabela CIN (fora do escopo Etapa 1)
 3. Exportar ambas as funções
 
 **Done when:**

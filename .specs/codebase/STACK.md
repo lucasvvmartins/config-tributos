@@ -21,8 +21,14 @@
 ## Compiler / Plugins
 
 - @vitejs/plugin-react-swc ^4.3.0 (SWC, não Babel)
-- lovable-tagger ^1.1.13 (apenas em development mode)
+- lovable-tagger ^1.1.13 (apenas em development mode — plugin de dev, não define plataforma de deploy)
 - @tailwindcss/vite ^4.2.2
+
+## Deploy
+
+- Estratégia: SPA estática hospedada em domínio próprio (sem dependência de Lovable)
+- Opções: Vercel / Netlify / S3+CloudFront / VPS próprio
+- Build output: `dist/` (Vite padrão)
 
 ## Testing
 

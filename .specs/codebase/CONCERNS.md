@@ -60,6 +60,26 @@
 
 ---
 
+## [HIGH] Mapeamento v1.0 continha campos e tabelas fabricados
+
+**Evidence:** Verificação contra SX3 real revelou que campos como `B1_TESSION`, `MV_TESSION`, `CDA_CODTRI`, `CDH_TPEXCE` não existem. A tabela CDA real é "Lançamentos documento fiscal", não Configurador de Tributos. SBZ é de estoque, não NCM fiscal.
+
+**Risk:** Qualquer código baseado no mapeamento v1.0 referenciaria campos inexistentes — causando erros em runtime na fase ADVPL.
+
+**Fix:** Mapeamento v2.0 já reescrito com verificação SX3 (07/04/2026). Regra: NUNCA referenciar campos sem verificar no sx30101.
+
+---
+
+## [MEDIUM] Design.md v1 tinha divergências com campos reais
+
+**Evidence:** PerfilParticipante.tipo era 'C'|'F' (correto: '1'|'2'). RegraBase.adicoes/deducoes eram arrays (correto: campos individuais F27_DESCON/FRETE/SEGURO/DESPE). RegraAliquota.formula não existe (fórmulas ficam em CIN).
+
+**Risk:** Tipos TypeScript gerariam dados incompatíveis com as tabelas reais do Protheus.
+
+**Fix:** Design.md v2 revisado contra SX3 real (07/04/2026). Tabela de mapeamento campo→interface incluída.
+
+---
+
 ## [LOW] Navegação por abas usa string literal sem type safety
 
 **Evidence:** `TabNav.tsx` — array `tabs` com `id` como string. `App.tsx` compara `activeTab === "upload"` etc.
