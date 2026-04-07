@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   Search,
   Map,
+  Settings2,
   Lightbulb,
   Code,
 } from "lucide-react";
@@ -14,6 +15,7 @@ const tabs = [
   { id: "visao", label: "Visão Geral", icon: LayoutDashboard },
   { id: "analise", label: "Análise Fiscal", icon: Search },
   { id: "mapeamento", label: "Mapeamento Protheus", icon: Map },
+  { id: "configurador", label: "Configurador CFGTRIB", icon: Settings2 },
   { id: "sugestoes", label: "Sugestões", icon: Lightbulb },
   { id: "gerar", label: "Gerar PRW", icon: Code },
 ] as const;

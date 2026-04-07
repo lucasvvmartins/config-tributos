@@ -8,12 +8,18 @@ import type {
   TESConfig,
   FiscalRule,
   FinancialRule,
-  StockRule,
   FiscalProfile,
   ProductInfo,
   Suggestion,
   Participante,
   OperationType,
+  PerfilOperacao,
+  PerfilOrigemDestino,
+  PerfilProduto,
+  PerfilParticipante,
+  RegraBase,
+  RegraAliquota,
+  RegraCalculo,
 } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
@@ -418,16 +424,46 @@ export function generateTES(nfs: NFeParsed[]): TESConfig[] {
   const sortedKeys = [...groups.keys()].sort();
   return sortedKeys.map((key, idx) => {
     const g = groups.get(key)!;
+    const tipo = (g.tpNF === "0" ? "E" : "S") as "E" | "S";
+    const cfop = g.cfop;
+    const atualizaEstoque = CFOP_ATUALIZA_ESTOQUE.has(cfop) ? "S" : "N";
+    const geraDuplicata = CFOP_SEM_DUPLICATA.has(cfop) ? "N" : "S";
+    const isRemessa = CFOP_REMESSA.has(cfop);
+    const isIndust = CFOP_INDUSTRIALIZACAO.has(cfop);
+    const cfop1 = cfopFirstDigit(cfop);
+
     return {
       codTes: padCode(idx + 1),
-      tipo: (g.tpNF === "0" ? "E" : "S") as "E" | "S",
-      cfop: g.cfop,
-      descricao: getCfopDescription(g.cfop),
+      tipo,
+      cfop,
+      descricao: getCfopDescription(cfop),
       cstIcms: g.cstIcms,
       cstIpi: g.cstIpi,
       cstPis: g.cstPis,
       cstCofins: g.cstCofins,
       count: g.count,
+      // Movimentacao
+      atualizaEstoque,
+      geraDuplicata,
+      entregaFutura: "0",
+      poderTerceiro: isIndust ? "R" : "N",
+      atualPrecCompra: tipo === "E" ? "S" : "N",
+      matConsumo: cfop === "1556" || cfop === "2556" ? "S" : "N",
+      ativoCIAP: cfop === "1551" || cfop === "2551" ? "S" : "N",
+      atualizaAtivo: cfop === "1551" || cfop === "2551" ? "S" : "N",
+      qtdZerada: "2",
+      vlrZerado: "2",
+      // ICMS
+      calculaIcms: isRemessa && !isIndust ? "N" : "S",
+      creditaIcms: tipo === "E" ? "S" : "N",
+      livroIcms: g.cstIcms === "40" || g.cstIcms === "41" ? "N" : "T",
+      // IPI
+      calculaIpi: cfop1 === "3" ? "S" : (tipo === "S" ? "N" : "S"),
+      creditaIpi: tipo === "E" ? "S" : "N",
+      livroIpi: "T",
+      // PIS/COFINS
+      pisCofins: "3",
+      creditaPisCof: tipo === "E" ? "1" : "3",
     };
   });
 }
@@ -584,7 +620,7 @@ export function generateFinancialRules(nfs: NFeParsed[]): FinancialRule[] {
 // ---------------------------------------------------------------------------
 // 4. generateStockRules
 // ---------------------------------------------------------------------------
-export function generateStockRules(nfs: NFeParsed[]): StockRule[] {
+export function generateStockRules(nfs: NFeParsed[]): { cfop: string; atualizaEstoque: boolean; geraDuplicata: boolean; poderTerceiro: boolean; descricao: string }[] {
   const cfops = new Map<string, {
     cfop: string;
     descricao: string;
@@ -1295,4 +1331,372 @@ export function generateOperations(nfs: NFeParsed[]): OperationType[] {
       color: OPERATION_COLORS[name] ?? "gray",
       icon: OPERATION_ICONS[name] ?? "HelpCircle",
     }));
+}
+
+// ---------------------------------------------------------------------------
+// CFGTRIB — Geracao de Perfis e Regras a partir de NF-es
+// ---------------------------------------------------------------------------
+
+const DEVOLUTION_CFOPS = new Set([
+  "1201", "1202", "1203", "1204", "1410", "1411",
+  "2201", "2202", "2203", "2204", "2410", "2411",
+  "3201", "3202", "3211",
+  "5201", "5202", "5203", "5204", "5210", "5410", "5411", "5412", "5413", "5414",
+  "6201", "6202", "6203", "6204", "6210", "6410", "6411",
+  "7201", "7202", "7211",
+]);
+
+/**
+ * 1. Gera perfis de operacao agrupando CFOPs por tipo (interna, interestadual,
+ *    exterior, devolucao) + perfil "TODOS OS CFOPS".
+ */
+export function generatePerfisOperacao(nfs: NFeParsed[]): PerfilOperacao[] {
+  const allCfops = new Set<string>();
+  for (const { item } of collectItems(nfs)) {
+    const cfop = safe(item.prod?.cfop);
+    if (cfop) allCfops.add(cfop);
+  }
+
+  const internas: string[] = [];
+  const interestaduais: string[] = [];
+  const exterior: string[] = [];
+  const devolucoes: string[] = [];
+
+  for (const cfop of allCfops) {
+    const d = cfopFirstDigit(cfop);
+    if (DEVOLUTION_CFOPS.has(cfop)) {
+      addUnique(devolucoes, cfop);
+    }
+    if (d === "5" || d === "1") {
+      addUnique(internas, cfop);
+    } else if (d === "6" || d === "2") {
+      addUnique(interestaduais, cfop);
+    } else if (d === "7" || d === "3") {
+      addUnique(exterior, cfop);
+    }
+  }
+
+  const perfis: PerfilOperacao[] = [];
+  let seq = 1;
+
+  const makeCfopEntries = (cfops: string[]) =>
+    [...cfops].sort().map((cfop) => ({ cfop, descricao: getCfopDescription(cfop) }));
+
+  if (internas.length > 0) {
+    perfis.push({
+      codigo: `PRF-OP-${padCode(seq++)}`,
+      descricao: "Operacoes Internas",
+      cfops: makeCfopEntries(internas),
+    });
+  }
+  if (interestaduais.length > 0) {
+    perfis.push({
+      codigo: `PRF-OP-${padCode(seq++)}`,
+      descricao: "Operacoes Interestaduais",
+      cfops: makeCfopEntries(interestaduais),
+    });
+  }
+  if (exterior.length > 0) {
+    perfis.push({
+      codigo: `PRF-OP-${padCode(seq++)}`,
+      descricao: "Operacoes Exterior",
+      cfops: makeCfopEntries(exterior),
+    });
+  }
+  if (devolucoes.length > 0) {
+    perfis.push({
+      codigo: `PRF-OP-${padCode(seq++)}`,
+      descricao: "Devolucoes",
+      cfops: makeCfopEntries(devolucoes),
+    });
+  }
+
+  // Perfil especial: TODOS OS CFOPS
+  perfis.push({
+    codigo: "000051",
+    descricao: "TODOS OS CFOPS",
+    cfops: makeCfopEntries([...allCfops]),
+  });
+
+  return perfis;
+}
+
+/**
+ * 2. Gera perfis de origem/destino a partir dos pares UF emitente x UF destinatario.
+ */
+export function generatePerfisOrigemDestino(nfs: NFeParsed[]): PerfilOrigemDestino[] {
+  const pairs = new Map<string, { ufOrigem: string; ufDestino: string }>();
+
+  for (const nf of nfs) {
+    const ufOrig = extractUf(nf, "emit");
+    const ufDest = extractUf(nf, "dest");
+    if (!ufOrig && !ufDest) continue;
+    const key = `${ufOrig}|${ufDest}`;
+    if (!pairs.has(key)) {
+      pairs.set(key, { ufOrigem: ufOrig, ufDestino: ufDest });
+    }
+  }
+
+  const perfis: PerfilOrigemDestino[] = [];
+  let seq = 1;
+
+  for (const pair of pairs.values()) {
+    perfis.push({
+      codigo: `PRF-OD-${padCode(seq++)}`,
+      descricao: `${pair.ufOrigem || "N/A"} -> ${pair.ufDestino || "N/A"}`,
+      ufs: [pair],
+    });
+  }
+
+  // Perfil especial: Todas as UFs
+  perfis.push({
+    codigo: "000002",
+    descricao: "Todas as UFs",
+    ufs: [{ ufOrigem: "*", ufDestino: "*" }],
+  });
+
+  return perfis;
+}
+
+/**
+ * 3. Gera perfis de produto agrupando por NCM.
+ */
+export function generatePerfisProduto(nfs: NFeParsed[]): PerfilProduto[] {
+  const ncmMap = new Map<string, Set<string>>();
+
+  for (const { item } of collectItems(nfs)) {
+    const ncm = safe(item.prod?.ncm);
+    const codProd = safe(item.prod?.cProd);
+    if (!ncm || !codProd) continue;
+    if (!ncmMap.has(ncm)) ncmMap.set(ncm, new Set());
+    ncmMap.get(ncm)!.add(codProd);
+  }
+
+  const perfis: PerfilProduto[] = [];
+  let seq = 1;
+
+  for (const [ncm, prods] of ncmMap) {
+    perfis.push({
+      codigo: `PRF-PROD-${padCode(seq++)}`,
+      descricao: `Produtos NCM ${ncm}`,
+      produtos: [...prods].sort().map((codProd) => ({ codProd })),
+    });
+  }
+
+  // Perfil especial: Todos os Produtos
+  perfis.push({
+    codigo: "PRF-PROD-TODOS",
+    descricao: "Todos os Produtos",
+    produtos: [{ codProd: "TODOS" }],
+  });
+
+  return perfis;
+}
+
+/**
+ * 4. Gera perfis de participante. Sempre cria perfil "TODOS".
+ */
+export function generatePerfisParticipante(nfs: NFeParsed[]): PerfilParticipante[] {
+  void nfs; // parametro mantido por consistencia de assinatura
+  const perfis: PerfilParticipante[] = [];
+
+  perfis.push({
+    codigo: "PRF-PART-TODOS",
+    descricao: "Todos os Participantes",
+    participantes: [
+      { tipo: "1", codPart: "TODOS", loja: "ZZ" },
+      { tipo: "2", codPart: "TODOS", loja: "ZZ" },
+    ],
+  });
+
+  return perfis;
+}
+
+/**
+ * 5. Gera regras de base de calculo por tributo.
+ */
+export function generateRegrasBase(nfs: NFeParsed[]): RegraBase[] {
+  void nfs;
+  return [
+    {
+      codigo: "BASE-ICMS-001",
+      descricao: "Base ICMS padrao (valor mercadoria + frete + seguro + despesas)",
+      valorOrigem: "01",
+      desconto: "N",
+      frete: "S",
+      seguro: "S",
+      despesas: "S",
+    },
+    {
+      codigo: "BASE-IPI-001",
+      descricao: "Base IPI padrao (valor mercadoria)",
+      valorOrigem: "01",
+    },
+    {
+      codigo: "BASE-PIS-001",
+      descricao: "Base PIS padrao (valor mercadoria)",
+      valorOrigem: "01",
+    },
+    {
+      codigo: "BASE-COF-001",
+      descricao: "Base COFINS padrao (valor mercadoria)",
+      valorOrigem: "01",
+    },
+    {
+      codigo: "BASE-CBS-001",
+      descricao: "Base CBS - Formula Manual (aguardando regulamentacao IBS/CBS)",
+      valorOrigem: "11",
+    },
+    {
+      codigo: "BASE-IBS-001",
+      descricao: "Base IBS - Formula Manual (aguardando regulamentacao IBS/CBS)",
+      valorOrigem: "11",
+    },
+  ];
+}
+
+/**
+ * 6. Gera regras de aliquota extraindo aliquotas unicas das NF-es.
+ */
+export function generateRegrasAliquota(nfs: NFeParsed[]): RegraAliquota[] {
+  const icmsAliquotas = new Set<number>();
+  const ipiAliquotas = new Set<number>();
+  const pisAliquotas = new Set<number>();
+  const cofAliquotas = new Set<number>();
+
+  for (const { item } of collectItems(nfs)) {
+    const pICMS = safeNum(item.icms?.pICMS);
+    if (pICMS > 0) icmsAliquotas.add(pICMS);
+
+    const pIPI = safeNum(item.ipi?.pIPI);
+    if (pIPI > 0) ipiAliquotas.add(pIPI);
+
+    const pPIS = safeNum(item.pis?.pAliq);
+    if (pPIS > 0) pisAliquotas.add(pPIS);
+
+    const pCOF = safeNum(item.cofins?.pAliq);
+    if (pCOF > 0) cofAliquotas.add(pCOF);
+  }
+
+  const regras: RegraAliquota[] = [];
+
+  for (const aliq of [...icmsAliquotas].sort((a, b) => a - b)) {
+    regras.push({
+      codigo: `ALIQ-ICMS-${aliq}`,
+      descricao: `Aliquota ICMS ${aliq}%`,
+      valorOrigem: "04",
+      tipoAliquota: "1",
+      aliquota: aliq,
+    });
+  }
+
+  for (const aliq of [...ipiAliquotas].sort((a, b) => a - b)) {
+    regras.push({
+      codigo: `ALIQ-IPI-${aliq}`,
+      descricao: `Aliquota IPI ${aliq}%`,
+      valorOrigem: "04",
+      tipoAliquota: "1",
+      aliquota: aliq,
+    });
+  }
+
+  for (const aliq of [...pisAliquotas].sort((a, b) => a - b)) {
+    regras.push({
+      codigo: `ALIQ-PIS-${aliq}`,
+      descricao: `Aliquota PIS ${aliq}%`,
+      valorOrigem: "04",
+      tipoAliquota: "1",
+      aliquota: aliq,
+    });
+  }
+
+  for (const aliq of [...cofAliquotas].sort((a, b) => a - b)) {
+    regras.push({
+      codigo: `ALIQ-COF-${aliq}`,
+      descricao: `Aliquota COFINS ${aliq}%`,
+      valorOrigem: "04",
+      tipoAliquota: "1",
+      aliquota: aliq,
+    });
+  }
+
+  // CBS e IBS com aliquotas iniciais da reforma tributaria
+  regras.push({
+    codigo: "ALIQ-CBS-001",
+    descricao: "Aliquota CBS padrao 0.9%",
+    valorOrigem: "04",
+    tipoAliquota: "1",
+    aliquota: 0.9,
+  });
+
+  regras.push({
+    codigo: "ALIQ-IBS-001",
+    descricao: "Aliquota IBS padrao 0.1%",
+    valorOrigem: "04",
+    tipoAliquota: "1",
+    aliquota: 0.1,
+  });
+
+  return regras;
+}
+
+/**
+ * 7. Gera regras de calculo (F2B) unindo perfis, bases e aliquotas.
+ */
+export function generateRegrasCalculo(nfs: NFeParsed[]): RegraCalculo[] {
+  const perfisOp = generatePerfisOperacao(nfs);
+  const perfisOD = generatePerfisOrigemDestino(nfs);
+  const perfisProd = generatePerfisProduto(nfs);
+  const perfisPart = generatePerfisParticipante(nfs);
+  const regrasBase = generateRegrasBase(nfs);
+  const regrasAliq = generateRegrasAliquota(nfs);
+
+  const firstPerfOp = perfisOp.find((p) => p.codigo !== "000051")?.codigo ?? "000051";
+  const firstPerfOD = perfisOD.find((p) => p.codigo !== "000002")?.codigo ?? "000002";
+  const firstPerfProd = perfisProd.find((p) => p.codigo !== "PRF-PROD-TODOS")?.codigo ?? "PRF-PROD-TODOS";
+  const firstPerfPart = perfisPart.find((p) => p.codigo !== "PRF-PART-TODOS")?.codigo ?? "PRF-PART-TODOS";
+
+  const findBase = (prefix: string) =>
+    regrasBase.find((r) => r.codigo.startsWith(prefix))?.codigo ?? "";
+  const findAliq = (prefix: string) =>
+    regrasAliq.find((r) => r.codigo.startsWith(prefix))?.codigo ?? "";
+
+  interface TributoConfig {
+    tributo: string;
+    idTotvs: string;
+    basePrefix: string;
+    aliqPrefix: string;
+    useTodos: boolean;
+  }
+
+  const tributos: TributoConfig[] = [
+    { tributo: "ICMS", idTotvs: "000021", basePrefix: "BASE-ICMS", aliqPrefix: "ALIQ-ICMS", useTodos: false },
+    { tributo: "IPI",  idTotvs: "000022", basePrefix: "BASE-IPI",  aliqPrefix: "ALIQ-IPI",  useTodos: false },
+    { tributo: "PIS",  idTotvs: "000015", basePrefix: "BASE-PIS",  aliqPrefix: "ALIQ-PIS",  useTodos: false },
+    { tributo: "COFINS", idTotvs: "000016", basePrefix: "BASE-COF", aliqPrefix: "ALIQ-COF", useTodos: false },
+    { tributo: "CBS", idTotvs: "000062", basePrefix: "BASE-CBS", aliqPrefix: "ALIQ-CBS", useTodos: true },
+    { tributo: "IBS", idTotvs: "000060", basePrefix: "BASE-IBS", aliqPrefix: "ALIQ-IBS", useTodos: true },
+  ];
+
+  const regras: RegraCalculo[] = [];
+
+  for (const t of tributos) {
+    regras.push({
+      codigo: `TG-${t.tributo}-001`,
+      descricao: `Regra de calculo ${t.tributo}`,
+      tributo: t.tributo,
+      idTotvs: t.idTotvs,
+      vigIni: "01/01/2026",
+      vigFim: "31/12/2049",
+      status: "1",
+      codBase: findBase(t.basePrefix),
+      codAliquota: findAliq(t.aliqPrefix),
+      perfProduto: t.useTodos ? "PRF-PROD-TODOS" : firstPerfProd,
+      perfOperacao: t.useTodos ? "000051" : firstPerfOp,
+      perfParticipante: t.useTodos ? "PRF-PART-TODOS" : firstPerfPart,
+      perfOrigemDestino: t.useTodos ? "000002" : firstPerfOD,
+    });
+  }
+
+  return regras;
 }

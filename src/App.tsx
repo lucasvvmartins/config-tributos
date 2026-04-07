@@ -6,6 +6,7 @@ import UploadPage from "@/pages/UploadPage";
 import VisaoPage from "@/pages/VisaoPage";
 import AnalisePage from "@/pages/AnalisePage";
 import MapeamentoPage from "@/pages/MapeamentoPage";
+import ConfiguradorPage from "@/pages/ConfiguradorPage";
 import SugestoesPage from "@/pages/SugestoesPage";
 import PrwPage from "@/pages/PrwPage";
 
@@ -22,6 +23,7 @@ export default function App() {
         {activeTab === "visao" && <VisaoPage />}
         {activeTab === "analise" && <AnalisePage />}
         {activeTab === "mapeamento" && <MapeamentoPage />}
+        {activeTab === "configurador" && <ConfiguradorPage />}
         {activeTab === "sugestoes" && <SugestoesPage />}
         {activeTab === "prw" && <PrwPage />}
       </main>

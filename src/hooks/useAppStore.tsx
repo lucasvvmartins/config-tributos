@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
-import type { NFeParsed, TESConfig, FiscalRule, FinancialRule, StockRule, FiscalProfile, ProductInfo, Suggestion, Participante, OperationType } from "@/lib/types";
+import type { NFeParsed, TESConfig, FiscalRule, FinancialRule, FiscalProfile, ProductInfo, Suggestion, Participante, OperationType, PerfilOperacao, PerfilOrigemDestino, PerfilProduto, PerfilParticipante, RegraBase, RegraAliquota, RegraCalculo } from "@/lib/types";
 import { parseNFe } from "@/lib/xml-parser";
 import * as engine from "@/lib/rules-engine";
 
@@ -13,7 +13,14 @@ interface AppState {
   tes: TESConfig[];
   fiscalRules: FiscalRule[];
   financialRules: FinancialRule[];
-  stockRules: StockRule[];
+  stockRules: { cfop: string; atualizaEstoque: boolean; geraDuplicata: boolean; poderTerceiro: boolean; descricao: string }[];
+  perfisOperacao: PerfilOperacao[];
+  perfisOrigemDestino: PerfilOrigemDestino[];
+  perfisProduto: PerfilProduto[];
+  perfisParticipante: PerfilParticipante[];
+  regrasBase: RegraBase[];
+  regrasAliquota: RegraAliquota[];
+  regrasCalculo: RegraCalculo[];
   profiles: FiscalProfile[];
   products: ProductInfo[];
   suggestions: Suggestion[];
@@ -44,6 +51,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     fiscalRules: [],
     financialRules: [],
     stockRules: [],
+    perfisOperacao: [],
+    perfisOrigemDestino: [],
+    perfisProduto: [],
+    perfisParticipante: [],
+    regrasBase: [],
+    regrasAliquota: [],
+    regrasCalculo: [],
     profiles: [],
     products: [],
     suggestions: [],
@@ -77,6 +91,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       fiscalRules: [],
       financialRules: [],
       stockRules: [],
+      perfisOperacao: [],
+      perfisOrigemDestino: [],
+      perfisProduto: [],
+      perfisParticipante: [],
+      regrasBase: [],
+      regrasAliquota: [],
+      regrasCalculo: [],
       profiles: [],
       products: [],
       suggestions: [],
@@ -127,6 +148,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         fiscalRules: engine.generateFiscalRules(allNFs),
         financialRules: engine.generateFinancialRules(allNFs),
         stockRules: engine.generateStockRules(allNFs),
+        perfisOperacao: engine.generatePerfisOperacao(allNFs),
+        perfisOrigemDestino: engine.generatePerfisOrigemDestino(allNFs),
+        perfisProduto: engine.generatePerfisProduto(allNFs),
+        perfisParticipante: engine.generatePerfisParticipante(allNFs),
+        regrasBase: engine.generateRegrasBase(allNFs),
+        regrasAliquota: engine.generateRegrasAliquota(allNFs),
+        regrasCalculo: engine.generateRegrasCalculo(allNFs),
         profiles: engine.generateProfiles(allNFs),
         products: engine.generateProducts(allNFs),
         suggestions: engine.generateSuggestions(allNFs),

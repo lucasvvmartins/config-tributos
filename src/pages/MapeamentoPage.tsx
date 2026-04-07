@@ -9,7 +9,6 @@ import type {
   TESConfig,
   FiscalRule,
   FinancialRule,
-  StockRule,
   FiscalProfile,
   ProductInfo,
 } from "@/lib/types";
@@ -17,7 +16,6 @@ import {
   BookOpen,
   Scale,
   Wallet,
-  Package,
   Users,
   ShoppingBag,
 } from "lucide-react";
@@ -26,7 +24,6 @@ const TABS = [
   { id: "tes", label: "TES", icon: BookOpen },
   { id: "fiscal", label: "Regras Fiscais", icon: Scale },
   { id: "financeiro", label: "Regras Financeiras", icon: Wallet },
-  { id: "estoque", label: "Regras de Estoque", icon: Package },
   { id: "perfis", label: "Perfis", icon: Users },
   { id: "produtos", label: "Produtos", icon: ShoppingBag },
 ] as const;
@@ -71,7 +68,6 @@ export default function MapeamentoPage() {
       {activeTab === "financeiro" && (
         <FinanceiroTab data={store.financialRules} />
       )}
-      {activeTab === "estoque" && <EstoqueTab data={store.stockRules} />}
       {activeTab === "perfis" && <PerfisTab data={store.profiles} />}
       {activeTab === "produtos" && <ProdutosTab data={store.products} />}
     </div>
@@ -224,54 +220,6 @@ function FinanceiroTab({ data }: { data: FinancialRule[] }) {
       header: "Ocorrências",
       render: (r: FinancialRule) => (
         <Badge variant="default">{r.count}</Badge>
-      ),
-    },
-  ];
-
-  return <DataTable columns={columns} data={data} />;
-}
-
-function EstoqueTab({ data }: { data: StockRule[] }) {
-  const columns = [
-    {
-      key: "cfop",
-      header: "CFOP",
-      render: (r: StockRule) => (
-        <span className="font-mono text-white">{r.cfop}</span>
-      ),
-    },
-    {
-      key: "atualizaEstoque",
-      header: "Atualiza Estoque",
-      render: (r: StockRule) => (
-        <Badge variant={r.atualizaEstoque ? "success" : "error"}>
-          {r.atualizaEstoque ? "Sim" : "Não"}
-        </Badge>
-      ),
-    },
-    {
-      key: "geraDuplicata",
-      header: "Gera Duplicata",
-      render: (r: StockRule) => (
-        <Badge variant={r.geraDuplicata ? "success" : "error"}>
-          {r.geraDuplicata ? "Sim" : "Não"}
-        </Badge>
-      ),
-    },
-    {
-      key: "poderTerceiro",
-      header: "Poder Terceiro",
-      render: (r: StockRule) => (
-        <Badge variant={r.poderTerceiro ? "warning" : "default"}>
-          {r.poderTerceiro ? "Sim" : "Não"}
-        </Badge>
-      ),
-    },
-    {
-      key: "descricao",
-      header: "Descrição",
-      render: (r: StockRule) => (
-        <span className="text-gray-300">{r.descricao}</span>
       ),
     },
   ];

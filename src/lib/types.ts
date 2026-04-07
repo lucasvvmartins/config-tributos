@@ -179,6 +179,75 @@ export interface TESConfig {
   cstPis: string;
   cstCofins: string;
   count: number;
+
+  // Movimentacao
+  atualizaEstoque: string;
+  geraDuplicata: string;
+  entregaFutura: string;
+  poderTerceiro: string;
+  atualPrecCompra: string;
+  matConsumo: string;
+  ativoCIAP: string;
+  atualizaAtivo: string;
+  qtdZerada: string;
+  vlrZerado: string;
+  finalidade?: string;
+  tipOperacao?: string;
+
+  // ICMS
+  calculaIcms: string;
+  creditaIcms: string;
+  livroIcms: string;
+  sitTribIcms?: string;
+  reducaoBaseIcms?: number;
+  icmsDiferido?: string;
+  percIcmsDif?: number;
+  calculaDifal?: string;
+
+  // IPI
+  calculaIpi: string;
+  creditaIpi: string;
+  livroIpi: string;
+  reducaoBaseIpi?: number;
+  destacaIpi?: string;
+
+  // PIS/COFINS
+  pisCofins: string;
+  creditaPisCof: string;
+  cstPisExpanded?: string;
+  cstCofinsExpanded?: string;
+  reducaoBasePis?: number;
+  reducaoBaseCof?: number;
+  aliqPisMaj?: number;
+  aliqCofMaj?: number;
+  pisCofST?: string;
+  agrPis?: string;
+  agrCof?: string;
+  pisZonaFranca?: string;
+  cofZonaFranca?: string;
+  tabelaNatRec?: string;
+  codNatRec?: string;
+  grpNatRec?: string;
+
+  // ISS
+  calculaIss?: string;
+  livroIss?: string;
+  retemIss?: string;
+
+  // ICMS-ST
+  baseIcmsST?: string;
+  redIcmsST?: number;
+  creditaIcmsST?: string;
+
+  // Financeiro
+  codPagamento?: string;
+
+  // Referencias
+  tesDevol?: string;
+  tesPoder3?: string;
+  csosn?: string;
+  bonificacao?: string;
+  cfps?: string;
 }
 
 export interface FiscalRule {
@@ -201,14 +270,6 @@ export interface FinancialRule {
   tPagDesc: string;
   parcelas: number;
   count: number;
-}
-
-export interface StockRule {
-  cfop: string;
-  atualizaEstoque: boolean;
-  geraDuplicata: boolean;
-  poderTerceiro: boolean;
-  descricao: string;
 }
 
 export interface FiscalProfile {
@@ -254,4 +315,135 @@ export interface OperationType {
   totalValue: number;
   color: string;
   icon: string;
+}
+
+// ---------------------------------------------------------------------------
+// CFGTRIB types — Perfis (F20+F21/F22/F23/F24)
+// ---------------------------------------------------------------------------
+
+// F20_TIPO='04' + F24 (Perfil Produto)
+export interface PerfilProduto {
+  codigo: string;
+  descricao: string;
+  produtos: Array<{
+    codProd: string;
+  }>;
+}
+
+// F20_TIPO='03' + F23 (Perfil Operacao/CFOP)
+export interface PerfilOperacao {
+  codigo: string;
+  descricao: string;
+  cfops: Array<{
+    cfop: string;
+    descricao: string;
+  }>;
+}
+
+// F20_TIPO='02' + F22 (Perfil Participante)
+export interface PerfilParticipante {
+  codigo: string;
+  descricao: string;
+  participantes: Array<{
+    tipo: '1' | '2';
+    codPart: string;
+    loja: string;
+    razaoSocial?: string;
+  }>;
+}
+
+// F20_TIPO='01' + F21 (Perfil Origem/Destino)
+export interface PerfilOrigemDestino {
+  codigo: string;
+  descricao: string;
+  ufs: Array<{
+    ufOrigem: string;
+    ufDestino: string;
+  }>;
+}
+
+// ---------------------------------------------------------------------------
+// CFGTRIB types — Regras Base, Aliquota, Escrituracao
+// ---------------------------------------------------------------------------
+
+export type ValorOrigemBase = '01' | '02' | '03' | '08' | '09' | '10' | '11';
+export type ValorOrigemAliq = '04' | '05' | '06';
+
+// Tabela F27 — Regra de Base de Calculo
+export interface RegraBase {
+  codigo: string;
+  descricao: string;
+  valorOrigem: ValorOrigemBase;
+  desconto?: string;
+  frete?: string;
+  seguro?: string;
+  despesas?: string;
+  icmsDesonerado?: string;
+  icmsRetido?: string;
+  reducaoBC?: number;
+  tipoReducao?: string;
+  unidMedida?: string;
+}
+
+// Tabela F28 — Regra de Aliquota
+export interface RegraAliquota {
+  codigo: string;
+  descricao: string;
+  valorOrigem: ValorOrigemAliq;
+  tipoAliquota: '1' | '2';
+  aliquota?: number;
+  urf?: string;
+  reducaoAliquota?: number;
+}
+
+// Tabela CJ2 — Regra de Escrituracao
+export interface RegraEscrituracao {
+  codigo: string;
+  descricao: string;
+  incidencia: string;
+  somaTotal?: string;
+  percDiferimento?: number;
+  cstCab?: string;
+  cst: string;
+  cstCct?: string;
+  cct?: string;
+  cctVigencia?: string;
+  indOp?: string;
+  nlivro?: string;
+  incidenciaReducao?: string;
+  cstDevolucao?: string;
+  incidenciaDevolucao?: string;
+}
+
+// ---------------------------------------------------------------------------
+// CFGTRIB types — Regra de Calculo F2B
+// ---------------------------------------------------------------------------
+
+// Tabela F2B — Regra Tributaria (tabela central do CFGTRIB)
+export interface RegraCalculo {
+  codigo: string;
+  descricao: string;
+  tributo: string;
+  idTotvs?: string;
+  vigIni: string;
+  vigFim: string;
+  status: '1' | '2';
+  codBase: string;
+  codBaseSecundaria?: string;
+  codAliquota: string;
+  codEscrituracao?: string;
+  perfProduto: string;
+  perfOperacao: string;
+  perfParticipante: string;
+  perfOrigemDestino: string;
+  arredondamento?: string;
+  regraFinanceira?: string;
+  regraApuracao?: string;
+  tributoMajoracao?: string;
+  origemRegra?: string;
+  tipoRegra?: string;
+  valorMinimo?: number;
+  valorMaximo?: number;
+  operadorMinimo?: string;
+  operadorMaximo?: string;
 }
